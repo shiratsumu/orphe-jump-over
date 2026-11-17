@@ -608,6 +608,7 @@ const workG = workC.getContext('2d', { willReadFrequently: true });
 function readFrame() {
   const W = 320, H = Math.round(W * video.videoHeight / video.videoWidth);
   if (workC.width !== W || workC.height !== H) { workC.width = W; workC.height = H; }
+  workG.imageSmoothingQuality = 'high';   // 1/4 縮小でのちらつきを減らす（サイズ変更で戻るので毎回設定）
   workG.drawImage(video, 0, 0, W, H);
   return { W, H, d: workG.getImageData(0, 0, W, H).data };
 }
@@ -741,10 +742,16 @@ function drawSegmentation(s, color, c = $('calCanvas')) {
 }
 function clearSegmentation() { const c = $('calCanvas'); c.getContext('2d').clearRect(0, 0, c.width, c.height); }
 
-/** 人が画面に入り、1.5 秒静止するまで待つ */
+/**
+ * 人が画面に入り、1.5 秒静止するまで待つ。
+ * 静止が始まった時点（run[0]）からの経過で判定する（ループ周期に左右されない）。
+ * 頭の検出が一瞬乱れる程度の外れ値（連続 2 コマまで）では静止をリセットしない。
+ */
 async function waitForStillPerson(B, height) {
-  const STILL_MS = 1500, TIMEOUT_MS = 30000, t0 = performance.now();
-  let hist = [];
+  const STILL_MS = 1500, TIMEOUT_MS = 30000, MAX_BAD = 3, t0 = performance.now();
+  let run = [], bad = 0, lastProblem = '', prevLoop = t0;
+  const st = calib.stats = { loops: 0, loopMs: 0, validFrames: 0, resets: 0, maxStillMs: 0, outliers: 0 };
+  const med = k => { const v = run.map(h => h[k]).sort((a, b) => a - b); return v[v.length >> 1]; };
   while (performance.now() - t0 < TIMEOUT_MS) {
     checkCal();
     const s = segmentPerson(readFrame(), B);
@@ -758,29 +765,34 @@ async function waitForStillPerson(B, height) {
     drawSegmentation(s, problem ? '#f5a524' : '#36d399');
 
     const now = performance.now();
-    if (problem) hist = [];
-    else {
-      hist.push({ t: now, top: s.top, bottom: s.bottom + 1, cx: s.cx, W, H });
-      while (hist.length && hist[0].t < now - STILL_MS) hist.shift();
-    }
-    let prog = 0;
-    if (hist.length > 3) {
-      const span = (k) => Math.max(...hist.map(h => h[k])) - Math.min(...hist.map(h => h[k]));
-      const still = span('top') <= H * 0.015 && span('bottom') <= H * 0.015 && span('cx') <= W * 0.03;
-      if (!still) hist = hist.slice(-1);
-      prog = Math.min(1, (now - hist[0].t) / STILL_MS);
-      if (still && now - hist[0].t >= STILL_MS * 0.95) {
-        const med = k => { const v = hist.map(h => h[k]).sort((a, b) => a - b); return v[v.length >> 1]; };
-        return { top: med('top') / H, ground: med('bottom') / H, cx: med('cx') / W, seg: s };
+    st.loops++; st.loopMs += now - prevLoop; prevLoop = now;
+    const smp = problem ? null : { t: now, top: s.top, bottom: s.bottom + 1, cx: s.cx };
+    if (smp) st.validFrames++;
+    const dev = !smp || (run.length > 0 && (Math.abs(smp.top - med('top')) > H * 0.015 ||
+      Math.abs(smp.bottom - med('bottom')) > H * 0.015 || Math.abs(smp.cx - med('cx')) > W * 0.03));
+    if (dev) {
+      if (run.length) st.outliers++;
+      if (++bad >= MAX_BAD) {                      // 続けてずれた → 動いた（または居なくなった）
+        if (run.length) st.resets++;
+        run = smp ? [smp] : []; bad = 0;
       }
+    } else { bad = 0; run.push(smp); }
+    if (problem) lastProblem = problem;
+
+    const stillMs = run.length ? now - run[0].t : 0;
+    st.maxStillMs = Math.max(st.maxStillMs, stillMs);
+    if (run.length >= 5 && stillMs >= STILL_MS) {
+      return { top: med('top') / H, ground: med('bottom') / H, cx: med('cx') / W, seg: s };
     }
+    const prog = Math.min(1, stillMs / STILL_MS);
     showGuideBox(`<div class="step">STEP 3 / 3</div>
       <div class="title">画面の中に入って、静止してください</div>
       <div class="sub ${problem ? 'ng' : 'ok'}">${problem || (prog > 0 ? 'そのまま動かないでください…' : `跳ぶ場所に全身が映るように、まっすぐ立ってください（身長 ${height} cm）`)}</div>
       <div class="bar"><div style="width:${Math.round(prog * 100)}%"></div></div>${CANCEL_BTN}`, true);
     await sleep(100);
   }
-  throw new Error('人を検出できませんでした。背景がすっきりした明るい場所で、全身が映るように立ってください。');
+  if (st.validFrames < 10) throw new Error(lastProblem || '人を検出できませんでした。背景がすっきりした明るい場所で、全身が映るように立ってください。');
+  throw new Error('静止を確認できませんでした。跳ぶ場所で、まっすぐ立ったまま 2 秒ほど動かずにいてください。');
 }
 
 // ---- 校正の記録（録画の zip に calibration.csv と画像として入る） ----
@@ -796,6 +808,8 @@ async function logCalibration({ ok, reason = '', height, B, seg: s }) {
     work_w: v(s?.W), work_h: v(s?.H), head_width_px: v(s?.headW), shoulder_width_px: v(s?.shoulderW),
     person_area_px: v(s?.area), merged_parts: v(s?.merged), exposure_gain: v(s?.gain),
     video: `${video.videoWidth}x${video.videoHeight}`, camera: stream?.getVideoTracks()[0]?.label || '',
+    loop_ms: v(calib?.stats?.loops ? calib.stats.loopMs / calib.stats.loops : undefined), valid_frames: v(calib?.stats?.validFrames),
+    still_resets: v(calib?.stats?.resets), outlier_frames: v(calib?.stats?.outliers), max_still_ms: v(calib?.stats?.maxStillMs),
   });
   const imgs = {};
   if (B) {
@@ -820,7 +834,8 @@ async function logCalibration({ ok, reason = '', height, B, seg: s }) {
 function calibrationCSV() {
   const cols = ['time', 'result', 'reason', 'height_cm', 'ref_norm', 'ground_norm', 'objX_norm', 'method', 'head_found',
     'top_px', 'raw_top_px', 'bottom_px', 'work_w', 'work_h', 'head_width_px', 'shoulder_width_px', 'person_area_px',
-    'merged_parts', 'exposure_gain', 'video', 'camera'];
+    'merged_parts', 'exposure_gain', 'video', 'camera',
+    'loop_ms', 'valid_frames', 'still_resets', 'outlier_frames', 'max_still_ms'];
   const esc = x => /[",\n]/.test(String(x)) ? `"${String(x).replace(/"/g, '""')}"` : x;
   const rows = calLog.map(r => cols.map(k => esc(r[k] ?? '')).join(','));
   // 保存時点の設定（手で線を動かした後の値）

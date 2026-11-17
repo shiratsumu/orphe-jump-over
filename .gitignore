@@ -1,0 +1,13 @@
+# 別リポジトリ（サイトは jsDelivr から読み込むので不要）
+ORPHE-CORE.js/
+# スマホ用 https サーバの自己署名証明書と秘密鍵（公開しない）
+scripts/cert/
+.DS_Store
+__pycache__/
+# 実験データ（生データ・教師データ・録画の zip）は公開しない
+/*.csv
+orphe_raw_*.csv
+manual-gt-*.csv
+orphe_session_*.zip
+*.mp4
+*.webm

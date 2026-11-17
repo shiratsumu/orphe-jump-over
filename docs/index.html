@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>JUMP ANALYZER — ORPHE CORE</title>
+<link href="https://cdn.jsdelivr.net/gh/Orphe-OSS/ORPHE-CORE.js@0344ad25eb13ca79f32745fc68a007f2085f624c/css/custom.css" rel="stylesheet">
+<link href="https://cdn.jsdelivr.net/gh/Orphe-OSS/ORPHE-CORE.js@0344ad25eb13ca79f32745fc68a007f2085f624c/css/orphe_custom.css" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.9.1/font/bootstrap-icons.css">
+<script src="https://cdn.jsdelivr.net/gh/Orphe-OSS/ORPHE-CORE.js@0344ad25eb13ca79f32745fc68a007f2085f624c/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdn.jsdelivr.net/gh/Orphe-OSS/ORPHE-CORE.js@0344ad25eb13ca79f32745fc68a007f2085f624c/js/ORPHE-CORE.js"></script>
+<script src="jump.js"></script>
+<style>
+  :root {
+    --bg: #0f1115; --panel: #181b22; --line: #2a2f3a; --text: #e8eaf0; --muted: #8a91a0;
+    --accent: #36d399; --warn: #f5a524; --air: #4aa3ff; --bad: #f87272;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font-family: -apple-system, "Hiragino Sans", "Noto Sans JP", sans-serif; }
+  /* ナビバー（ORPHE の example / JUMP CAMERA と同じ Bootstrap テーマ） */
+  .navbar { background: #0b0d11 !important; }
+  .brand-sub { font-size: 13px; letter-spacing: .18em; color: var(--muted); font-weight: 500; }
+  .tb { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .tb-group { display: flex; align-items: center; gap: 6px; padding-left: 10px; border-left: 1px solid var(--line); }
+  .tb .btn { white-space: nowrap; }
+  @media (max-width: 700px) { .tb-group { border-left: 0; padding-left: 0; } }
+  button:not(.btn):not(.btn-close) { background: var(--panel); color: var(--text); border: 1px solid var(--line);
+           padding: 8px 14px; border-radius: 8px; font-size: 14px; cursor: pointer; }
+  button:disabled { opacity: .5; cursor: default; }
+  #status { font-size: 12px; color: var(--muted); white-space: nowrap; }
+
+  /* JUMP CAMERA への案内 */
+  #promo { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; text-decoration: none; color: var(--text);
+           background: linear-gradient(100deg, rgba(69,230,230,.16), rgba(69,230,230,.03) 60%), var(--panel);
+           border: 1px solid rgba(69,230,230,.45); transition: border-color .15s, transform .15s; }
+  #promo:hover { border-color: #45e6e6; transform: translateY(-1px); }
+  #promo .ico { font-size: 34px; color: #45e6e6; line-height: 1; }
+  #promo .txt { flex: 1 1 320px; }
+  #promo .ttl { font-size: 18px; font-weight: 800; }
+  #promo .dsc { font-size: 13px; color: var(--muted); margin-top: 4px; line-height: 1.7; }
+  #promo .go { white-space: nowrap; }
+  #status .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%;
+                 background: #555; margin-right: 6px; vertical-align: middle; }
+  #status.on .dot { background: var(--accent); }
+  main { max-width: 1000px; margin: 0 auto; padding: 20px; display: grid; gap: 20px;
+         grid-template-columns: 1fr 300px; }
+  .full { grid-column: 1 / -1; }
+  @media (max-width: 760px) { main { grid-template-columns: 1fr; } }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 20px; }
+
+  #drop { border: 2px dashed var(--line); text-align: center; cursor: pointer; padding: 22px;
+          transition: border-color .15s, background .15s; }
+  #drop:hover, #drop.over { border-color: var(--air); background: #1b2230; }
+  #drop b { font-size: 16px; }
+  #drop p { margin: 6px 0 0; color: var(--muted); font-size: 13px; }
+  #files { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin-top: 12px; }
+  .chip { font-size: 12px; padding: 4px 10px; border-radius: 99px; background: #222733; color: var(--muted); }
+  .chip.ok { background: #16352b; color: var(--accent); }
+
+  #hero { text-align: center; }
+  #phase { display: inline-block; font-size: 14px; padding: 4px 12px; border-radius: 99px;
+           background: #222733; color: var(--muted); }
+  #phase.air { background: var(--air); color: #021; }
+  #phase.done { background: var(--accent); color: #021; }
+  #big { font-size: clamp(72px, 16vw, 150px); font-weight: 800; line-height: 1;
+         margin: 18px 0 4px; font-variant-numeric: tabular-nums; }
+  #big small { font-size: .3em; font-weight: 600; color: var(--muted); margin-left: 6px; }
+  #sub { color: var(--muted); font-size: 14px; min-height: 1.4em; }
+  #msg { color: var(--warn); font-size: 13px; min-height: 1.4em; margin-top: 6px; }
+  canvas { width: 100%; height: 160px; display: block; margin-top: 12px; }
+  h2 { font-size: 14px; color: var(--muted); font-weight: 600; margin: 0 0 10px; }
+  #historyTitle { overflow-wrap: anywhere; }
+  #best { font-size: 32px; font-weight: 800; margin-bottom: 14px; }
+  #history { list-style: none; padding: 0; margin: 0; max-height: 360px; overflow: auto; }
+  #history li { display: flex; justify-content: space-between; padding: 6px 4px; border-radius: 6px;
+       border-bottom: 1px solid var(--line); font-variant-numeric: tabular-nums; font-size: 14px; cursor: pointer; }
+  #history li:hover { background: #1f2430; }
+  #history li.sel { background: #1b2a3d; }
+  #history li span:last-child { color: var(--muted); font-size: 12px; }
+  .hint { color: var(--muted); font-size: 12px; line-height: 1.7; margin-top: 16px; }
+  input[type=file] { display: none; }
+
+  #stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-bottom: 16px; }
+  .stat { background: #12151b; border: 1px solid var(--line); border-radius: 10px; padding: 12px; }
+  .stat div:first-child { color: var(--muted); font-size: 12px; }
+  .stat div:last-child { font-size: 24px; font-weight: 800; margin-top: 4px; font-variant-numeric: tabular-nums; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; font-variant-numeric: tabular-nums; }
+  th, td { padding: 8px 6px; border-bottom: 1px solid var(--line); text-align: right; }
+  th { color: var(--muted); font-weight: 600; font-size: 12px; }
+  th:first-child, td:first-child { text-align: left; }
+  .bar { display: inline-block; height: 8px; border-radius: 4px; vertical-align: middle; margin-left: 6px; }
+  .tbl-wrap { overflow-x: auto; }
+</style>
+</head>
+<body>
+<nav class="navbar navbar-dark sticky-top border-bottom border-secondary py-2">
+  <div class="container-fluid tb">
+    <a class="navbar-brand d-flex align-items-center gap-2 me-auto" href="./">
+      <img src="https://cdn.jsdelivr.net/gh/Orphe-OSS/ORPHE-CORE.js@0344ad25eb13ca79f32745fc68a007f2085f624c/images/orphe.svg" alt="ORPHE" height="22">
+      <span class="brand-sub">JUMP ANALYZER</span>
+    </a>
+    <div class="tb-group" title="センサー">
+      <span id="status"><span class="dot"></span><span id="statusText">センサー未接続</span></span>
+      <button id="connect" class="btn btn-sm btn-primary"><i class="bi bi-bluetooth"></i> <span class="lbl">ORPHE CORE を接続</span></button>
+    </div>
+    <div class="tb-group">
+      <a class="btn btn-sm btn-outline-light" href="camera.html"><i class="bi bi-camera-video"></i> JUMP CAMERA</a>
+    </div>
+  </div>
+</nav>
+
+<main>
+  <a class="panel full" id="promo" href="camera.html">
+    <i class="bi bi-camera-video ico"></i>
+    <div class="txt">
+      <div class="ttl">この推定の仕組みを使ったサイト「JUMP CAMERA」へ</div>
+      <div class="dsc">カメラ（PC・スマホ）とORPHE COREで跳ぶと、いちばん高い瞬間の写真に「〇〇を飛び越えた！」と身近なもののイラストを合成して記録します。自動校正、録画（生データ・動画を zip で保存）、全画面表示にも対応しています。</div>
+    </div>
+    <span class="btn btn-primary go">JUMP CAMERA を開く <i class="bi bi-arrow-right"></i></span>
+  </a>
+
+  <section class="panel full" id="drop">
+    <b>CSV をここにドラッグ＆ドロップ</b>（クリックで選択）
+    <p>生データ（orphe_raw_…csv）→ ジャンプを解析して記録を表示 ／ 教師データ（manual-gt-…csv）→ 推定値との差を表示。2 つ同時にドロップしても OK</p>
+    <div id="files"><span class="chip" id="rawChip">生データ: 未読込</span><span class="chip" id="gtChip">教師データ: 未読込</span></div>
+    <input type="file" id="fileInput" accept=".csv" multiple>
+  </section>
+
+  <section class="panel" id="hero">
+    <span id="phase">待機中</span>
+    <div id="big">--<small>cm</small></div>
+    <div id="sub">接続したら 1 秒ほど静止してからジャンプしてください</div>
+    <div id="msg"></div>
+    <canvas id="traj" width="1200" height="320"></canvas>
+  </section>
+
+  <aside class="panel">
+    <h2>ベスト</h2>
+    <div id="best">-- cm</div>
+    <h2 id="historyTitle">履歴</h2>
+    <ol id="history"></ol>
+    <button id="clear" style="margin-top:12px;width:100%">履歴をクリア</button>
+    <p class="hint">
+      表示値は「靴底の最高到達点の高さ」です（教師データ 9 本で補正、交差検証の誤差 約 ±2.5 cm）。
+      センサーは教師データ撮影時と同じ位置に装着してください。
+    </p>
+  </aside>
+
+  <section class="panel full" id="compare" hidden>
+    <h2>教師データとの比較 <span id="cmpInfo" style="font-weight:400"></span></h2>
+    <div id="stats"></div>
+    <div class="tbl-wrap"><table>
+      <thead><tr><th>ジャンプ</th><th>動画時刻 [s]</th><th>滞空 [ms]</th><th>推定 [cm]</th><th>教師 [cm]</th><th>差 (推定−教師)</th></tr></thead>
+      <tbody id="cmpBody"></tbody>
+    </table></div>
+    <p class="hint" id="cmpNote"></p>
+  </section>
+</main>
+
+<script>
+const $ = id => document.getElementById(id);
+const detector = new JumpDetector();
+const clock = new SerialClock();
+let history = [];          // {cm, flight, label, ev}
+let fileJumps = null;      // 生データから解析したジャンプ
+let gtRows = null;         // 教師データ
+let selected = -1;
+
+// ---------- 表示 ----------
+function setPhase(text, cls) { const el = $('phase'); el.textContent = text; el.className = cls || ''; }
+
+function showJump(e, animate) {
+  if (animate) animateNumber(e.cm);
+  else $('big').innerHTML = `${e.cm.toFixed(1)}<small>cm</small>`;
+  $('sub').textContent = `滞空 ${(e.flight * 1000).toFixed(0)} ms`;
+  $('msg').textContent = e.still ? '' : '踏み切り前に静止できていなかった可能性があります';
+  drawTraj(e);
+}
+
+function onLiveEvent(e) {
+  if (!e) return;
+  if (e.type === 'takeoff') { setPhase('空中', 'air'); $('msg').textContent = ''; return; }
+  if (e.type === 'cancel') { setPhase('待機中'); return; }
+  if (e.type === 'rejected') { setPhase('待機中'); $('msg').textContent = e.reason; return; }
+  setPhase('着地', 'done');
+  showJump(e, true);
+  history.unshift({ cm: e.cm, flight: e.flight, label: new Date().toLocaleTimeString(), ev: e });
+  selected = 0;
+  renderHistory();
+  setTimeout(() => { if ($('phase').textContent === '着地') setPhase('待機中'); }, 1500);
+}
+
+function animateNumber(target) {
+  const el = $('big'); const start = performance.now(); const dur = 600;
+  (function step(now) {
+    const k = Math.min(1, (now - start) / dur); const v = target * (1 - Math.pow(1 - k, 3));
+    el.innerHTML = `${v.toFixed(1)}<small>cm</small>`;
+    if (k < 1) requestAnimationFrame(step);
+  })(start);
+}
+
+function renderHistory() {
+  $('history').innerHTML = history.map((h, i) =>
+    `<li data-i="${i}" class="${i === selected ? 'sel' : ''}"><span>#${history.length - i}　<b>${h.cm.toFixed(1)} cm</b></span>` +
+    `<span>${(h.flight * 1000).toFixed(0)} ms · ${h.label}</span></li>`).join('');
+  const best = history.reduce((m, h) => Math.max(m, h.cm), 0);
+  $('best').textContent = history.length ? `${best.toFixed(1)} cm` : '-- cm';
+}
+$('history').onclick = ev => {
+  const li = ev.target.closest('li'); if (!li) return;
+  selected = +li.dataset.i; showJump(history[selected].ev, false); renderHistory();
+};
+
+function drawTraj(e) {
+  const c = $('traj'), g = c.getContext('2d'), W = c.width, H = c.height, pad = 30;
+  g.clearRect(0, 0, W, H);
+  const maxZ = Math.max(20, ...e.traj.map(p => p[1])) * 1.15;
+  const X = t => pad + (W - 2 * pad) * t / e.flight;
+  const Y = z => H - pad - (H - 2 * pad) * z / maxZ;
+  g.strokeStyle = '#2a2f3a'; g.lineWidth = 2;
+  g.beginPath(); g.moveTo(pad, Y(0)); g.lineTo(W - pad, Y(0)); g.stroke();
+  g.strokeStyle = '#4aa3ff'; g.lineWidth = 5; g.beginPath();
+  e.traj.forEach(([t, z], i) => i ? g.lineTo(X(t), Y(z)) : g.moveTo(X(t), Y(z)));
+  g.stroke();
+  const ap = e.traj.reduce((m, p) => p[1] > m[1] ? p : m, [0, 0]);
+  g.fillStyle = '#36d399'; g.beginPath(); g.arc(X(ap[0]), Y(ap[1]), 9, 0, 7); g.fill();
+  g.fillStyle = '#8a91a0'; g.font = '24px sans-serif';
+  g.fillText('足の推定軌跡（補正前）', pad, pad);
+  g.fillText(`${(e.flight * 1000).toFixed(0)} ms`, W - pad - 90, H - 6);
+}
+
+// ---------- 実機 ----------
+const ble = new Orphe(0);
+ble.setup();
+ble.gotConvertedAcc = function (acc) {
+  // gotQuat → gotConvertedAcc の順で呼ばれるので ble.quat は同じサンプルの姿勢
+  const t = (acc.serial_number !== undefined)
+    ? clock.time(acc.serial_number, acc.packet_number)
+    : clock.arrival(performance.now());  // CORE 2.0 はシリアル番号なし
+  onLiveEvent(detector.push(t, acc, ble.quat));
+};
+let connected = false;
+ble.gotBLEFrequency = hz => { if (connected) $('statusText').textContent = `接続中 · ${Math.round(hz)} Hz`; };
+ble.onDisconnect = () => {
+  connected = false; $('status').className = ''; $('statusText').textContent = '切断されました';
+  setConnectUI(false);
+};
+function setConnectUI(on) {
+  const b = $('connect');
+  b.querySelector('.lbl').textContent = on ? '切断' : 'ORPHE CORE を接続';
+  b.classList.toggle('btn-primary', !on); b.classList.toggle('btn-outline-light', on);
+}
+$('connect').onclick = async () => {
+  if (connected) { ble.stop(); return; }
+  if (!navigator.bluetooth) { $('msg').textContent = 'このブラウザは Web Bluetooth に対応していません（Chrome を使ってください）'; return; }
+  $('connect').disabled = true; $('statusText').textContent = '接続中…';
+  try {
+    detector.reset(); clock.reset();
+    history = []; selected = -1; renderHistory(); $('historyTitle').textContent = '履歴（ライブ）';
+    await ble.begin('SENSOR_VALUES', { range: { acc: 16, gyro: 2000 } });
+    connected = true;
+    $('status').className = 'on'; $('statusText').textContent = '接続中';
+    setConnectUI(true);
+  } catch (err) {
+    console.error(err); $('statusText').textContent = '接続失敗'; $('msg').textContent = String(err.message || err);
+  } finally { $('connect').disabled = false; }
+};
+
+// ---------- CSV 読み込み ----------
+function parseCSV(text) {
+  const lines = text.replace(/^﻿/, '').trim().split(/\r?\n/);
+  const head = lines[0].split(',').map(s => s.trim());
+  return { head, rows: lines.slice(1).filter(l => l.trim()).map(l => l.split(',')) };
+}
+
+function analyzeRaw({ head, rows }) {
+  const ix = k => head.indexOf(k);
+  const det = new JumpDetector(), clk = new SerialClock();
+  const jumps = [], rejected = [];
+  const i0 = Number(rows[0]?.[ix('sample_idx')]) || 0;
+  for (const r of rows) {
+    const c = r.map(Number);
+    // CORE 3.0: シリアル番号から / CORE 2.0: t_ms、それも無ければサンプル番号 × 20 ms（約 50 Hz）
+    const t = ix('serial') >= 0 && r[ix('serial')] !== '' ? clk.time(c[ix('serial')], c[ix('packet')])
+      : Number.isFinite(c[ix('t_ms')]) && r[ix('t_ms')] !== '' ? c[ix('t_ms')] / 1000
+      : (c[ix('sample_idx')] - i0) * 0.02;
+    const e = det.push(t,
+      { x: c[ix('ax_g')], y: c[ix('ay_g')], z: c[ix('az_g')] },
+      { w: c[ix('qw')], x: c[ix('qx')], y: c[ix('qy')], z: c[ix('qz')] });
+    if (e && e.type === 'jump') jumps.push(e);
+    if (e && e.type === 'rejected') rejected.push(e);
+  }
+  return { jumps, rejected };
+}
+
+function loadRaw(name, csv) {
+  const { jumps, rejected } = analyzeRaw(csv);
+  fileJumps = jumps;
+  $('rawChip').textContent = `生データ: ${name}（${jumps.length} 回）`; $('rawChip').className = 'chip ok';
+  history = jumps.slice().reverse().map(e => ({ cm: e.cm, flight: e.flight, label: `${e.takeoffT.toFixed(1)} s`, ev: e }));
+  $('historyTitle').textContent = `履歴（${name}）`;
+  setPhase(`${jumps.length} 回のジャンプを検出`, 'done');
+  if (jumps.length) {
+    // ベストのジャンプを表示
+    selected = history.reduce((bi, h, i) => h.cm > history[bi].cm ? i : bi, 0);
+    showJump(history[selected].ev, true);
+  } else {
+    $('big').innerHTML = '--<small>cm</small>'; $('sub').textContent = '';
+    $('msg').textContent = 'ジャンプが検出されませんでした';
+  }
+  if (rejected.length) $('msg').textContent = `除外 ${rejected.length} 件: ${rejected.map(r => r.reason).join(' / ')}`;
+  renderHistory(); renderCompare();
+}
+
+function loadGT(name, { head, rows }) {
+  const ix = k => head.indexOf(k);
+  const col = ['manual_gt_cm', 'gt_cm', 'height_cm'].find(k => ix(k) >= 0);
+  gtRows = rows.map((r, i) => ({
+    no: ix('jump_no') >= 0 ? r[ix('jump_no')] : String(i + 1),
+    cm: parseFloat(r[ix(col)]),
+    time: ix('video_time_s') >= 0 ? parseFloat(r[ix('video_time_s')]) : NaN,
+  })).filter(g => isFinite(g.cm));
+  $('gtChip').textContent = `教師データ: ${name}（${gtRows.length} 本）`; $('gtChip').className = 'chip ok';
+  renderCompare();
+}
+
+/**
+ * 推定ジャンプと教師データを対応付ける。
+ * 動画とセンサーは時刻原点が違うので、全ペアの時刻差を候補オフセットとして試し、
+ * 0.3 s 以内で一致する本数が最大（同数なら残差最小）のオフセットを採用する。
+ * 教師データに時刻が無ければ順番で対応付ける。
+ */
+function matchJumps(est, gt) {
+  const apex = est.map(e => e.takeoffT + e.apexT);
+  if (gt.some(g => !isFinite(g.time))) {
+    return { pairs: gt.map((g, i) => ({ g, e: est[i] || null })), offset: null };
+  }
+  let best = null;
+  for (const a of apex) for (const g of gt) {
+    const off = a - g.time;
+    const used = new Set(); let n = 0, res = 0;
+    const pairs = gt.map(gg => {
+      let bi = -1, bd = 0.3;
+      apex.forEach((aa, i) => { const d = Math.abs(aa - off - gg.time); if (!used.has(i) && d < bd) { bd = d; bi = i; } });
+      if (bi >= 0) { used.add(bi); n++; res += bd; }
+      return { g: gg, e: bi >= 0 ? est[bi] : null };
+    });
+    if (!best || n > best.n || (n === best.n && res < best.res)) best = { n, res, pairs, offset: off, used };
+  }
+  // ジッタを均して最終オフセットを再計算
+  const m = best.pairs.filter(p => p.e);
+  const offset = m.reduce((s, p) => s + (p.e.takeoffT + p.e.apexT - p.g.time), 0) / Math.max(1, m.length);
+  const extra = est.filter((e, i) => !best.used.has(i));
+  return { pairs: best.pairs, offset, extra };
+}
+
+function renderCompare() {
+  if (!fileJumps || !gtRows) { $('compare').hidden = true; return; }
+  $('compare').hidden = false;
+  const { pairs, offset, extra = [] } = matchJumps(fileJumps, gtRows);
+  const diffs = pairs.filter(p => p.e).map(p => p.e.cm - p.g.cm);
+  const n = diffs.length;
+  const mae = diffs.reduce((s, d) => s + Math.abs(d), 0) / n;
+  const rmse = Math.sqrt(diffs.reduce((s, d) => s + d * d, 0) / n);
+  const bias = diffs.reduce((s, d) => s + d, 0) / n;
+  const maxd = diffs.reduce((m, d) => Math.abs(d) > Math.abs(m) ? d : m, 0);
+  const pct = pairs.filter(p => p.e).reduce((s, p) => s + Math.abs(p.e.cm - p.g.cm) / p.g.cm, 0) / n * 100;
+  const fmt = (v, sign) => (sign && v > 0 ? '+' : '') + v.toFixed(1);
+  $('stats').innerHTML = n ? [
+    ['対応付け', `${n} / ${gtRows.length} 本`],
+    ['平均絶対誤差 MAE', `${mae.toFixed(1)} cm`],
+    ['RMSE', `${rmse.toFixed(1)} cm`],
+    ['平均の偏り', `${fmt(bias, true)} cm`],
+    ['最大の差', `${fmt(maxd, true)} cm`],
+    ['平均相対誤差', `${pct.toFixed(1)} %`],
+  ].map(([k, v]) => `<div class="stat"><div>${k}</div><div>${v}</div></div>`).join('')
+    : '<div class="stat"><div>対応付け</div><div>0 本</div></div>';
+  const maxAbs = Math.max(1, ...diffs.map(Math.abs));
+  $('cmpBody').innerHTML = pairs.map(({ g, e }) => {
+    if (!e) return `<tr><td>#${g.no}</td><td>${isFinite(g.time) ? g.time.toFixed(2) : '-'}</td><td>-</td><td>未検出</td><td>${g.cm.toFixed(1)}</td><td>-</td></tr>`;
+    const d = e.cm - g.cm, col = Math.abs(d) <= 3 ? 'var(--accent)' : Math.abs(d) <= 6 ? 'var(--warn)' : 'var(--bad)';
+    return `<tr><td>#${g.no}</td><td>${isFinite(g.time) ? g.time.toFixed(2) : '-'}</td><td>${(e.flight * 1000).toFixed(0)}</td>` +
+      `<td><b>${e.cm.toFixed(1)}</b></td><td>${g.cm.toFixed(1)}</td>` +
+      `<td style="color:${col}">${fmt(d, true)}<span class="bar" style="width:${Math.abs(d) / maxAbs * 60}px;background:${col}"></span></td></tr>`;
+  }).join('');
+  $('cmpInfo').textContent = offset !== null ? `（センサー時刻 − 動画時刻 = ${offset.toFixed(2)} s で対応付け）` : '（順番で対応付け）';
+  $('cmpNote').textContent = extra.length
+    ? `教師データに対応しないジャンプが ${extra.length} 回あります（${extra.map(e => e.takeoffT.toFixed(1) + ' s').join(', ')}）。`
+    : '';
+}
+
+async function handleFiles(files) {
+  for (const f of files) {
+    const csv = parseCSV(await f.text());
+    if (csv.head.includes('ax_g') && csv.head.includes('qw')) loadRaw(f.name, csv);
+    else if (csv.head.some(h => /gt_cm|height_cm/.test(h))) loadGT(f.name, csv);
+    else $('msg').textContent = `${f.name}: 形式を判別できませんでした（生データか教師データの CSV を使ってください）`;
+  }
+}
+
+const drop = $('drop');
+drop.onclick = () => $('fileInput').click();
+$('fileInput').onchange = ev => { handleFiles([...ev.target.files]); ev.target.value = ''; };
+['dragenter', 'dragover'].forEach(t => document.addEventListener(t, ev => { ev.preventDefault(); drop.classList.add('over'); }));
+['dragleave', 'drop'].forEach(t => document.addEventListener(t, ev => {
+  ev.preventDefault();
+  if (t === 'drop' || ev.target === document.documentElement || !ev.relatedTarget) drop.classList.remove('over');
+}));
+document.addEventListener('drop', ev => handleFiles([...ev.dataTransfer.files].filter(f => /\.csv$/i.test(f.name))));
+
+$('clear').onclick = () => { history = []; selected = -1; renderHistory(); };
+</script>
+</body>
+</html>
